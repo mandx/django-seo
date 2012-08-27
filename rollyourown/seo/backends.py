@@ -11,12 +11,14 @@ from django.template import Template, Context
 from django.utils.datastructures import SortedDict
 
 from rollyourown.seo.utils import resolve_to_name, NotSet, Literal
+from rollyourown.seo.i18n_utils import i18n_unprefix_path
 
 RESERVED_FIELD_NAMES = ('_metadata', '_path', '_content_type', '_object_id',
-                        '_content_object', '_view', '_site', 'objects', 
-                        '_resolve_value', '_set_context', 'id', 'pk' )
+                        '_content_object', '_view', '_site', 'objects',
+                        '_resolve_value', '_set_context', 'id', 'pk', )
 
 backend_registry = SortedDict()
+
 
 class MetadataBaseModel(models.Model):
 
@@ -104,8 +106,9 @@ class BaseManager(models.Manager):
 # This means that:
 #   -  all fields that share uniqueness (backend fields, _site, _language) need to be defined in the same model
 #   -  as backends should have full control over the model, therefore every backend needs to define the compulsory fields themselves (eg _site and _language).
-#      There is no way to add future compulsory fields to all backends without editing each backend individually. 
+#      There is no way to add future compulsory fields to all backends without editing each backend individually.
 #      This is probably going to have to be a limitataion we need to live with.
+
 
 class MetadataBackend(object):
     name = None
@@ -145,10 +148,9 @@ class MetadataBackend(object):
                     return queryset
         return _Manager
 
-
     @staticmethod
     def validate(options):
-        """ Validates the application of this backend to a given metadata 
+        """ Validates the application of this backend to a given metadata
         """
 
 
@@ -158,7 +160,7 @@ class PathBackend(MetadataBackend):
     unique_together = (("_path",),)
 
     def get_instances(self, queryset, path, context):
-        return queryset.filter(_path=path)
+        return queryset.filter(_path=i18n_unprefix_path(path))
 
     def get_model(self, options):
         class PathMetadataBase(MetadataBaseModel):
@@ -209,7 +211,7 @@ class ViewBackend(MetadataBackend):
 
             def _populate_from_kwargs(self):
                 return {'view_name': self._view}
-        
+
             def _resolve_value(self, name):
                 value = super(ViewMetadataBase, self)._resolve_value(name)
                 try:
@@ -219,7 +221,7 @@ class ViewBackend(MetadataBackend):
 
             def __unicode__(self):
                 return self._view
-    
+
             class Meta:
                 abstract = True
                 unique_together = self.get_unique_together(options)
@@ -233,7 +235,7 @@ class ModelInstanceBackend(MetadataBackend):
     unique_together = (("_path",), ("_content_type", "_object_id"))
 
     def get_instances(self, queryset, path, context):
-        return queryset.filter(_path=path)
+        return queryset.filter(_path=i18n_unprefix_path(path))
 
     def get_model(self, options):
         class ModelInstanceMetadataBase(MetadataBaseModel):
@@ -246,7 +248,7 @@ class ModelInstanceBackend(MetadataBackend):
             if options.use_i18n:
                 _language = models.CharField(_("language"), max_length=5, null=True, blank=True, db_index=True, choices=settings.LANGUAGES)
             objects = self.get_manager(options)()
-        
+
             def __unicode__(self):
                 return self._path
 
@@ -267,7 +269,7 @@ class ModelInstanceBackend(MetadataBackend):
                 except AttributeError:
                     pass
                 else:
-                    self._path = path_func()
+                    self._path = i18n_unprefix_path(path_func())
                 super(ModelInstanceMetadataBase, self).save(*args, **kwargs)
 
         return ModelInstanceMetadataBase
@@ -295,22 +297,22 @@ class ModelBackend(MetadataBackend):
                 return unicode(self._content_type)
 
             def _process_context(self, context):
-                """ Use the given model instance as context for rendering 
-                    any substitutions. 
+                """ Use the given model instance as context for rendering
+                    any substitutions.
                 """
                 if 'model_instance' in context:
                     self.__instance = context['model_instance']
 
             def _populate_from_kwargs(self):
                 return {'content_type': self._content_type}
-        
+
             def _resolve_value(self, name):
                 value = super(ModelMetadataBase, self)._resolve_value(name)
                 try:
                     return _resolve(value, self.__instance._content_object)
                 except AttributeError:
                     return value
-        
+
             class Meta:
                 abstract = True
                 unique_together = self.get_unique_together(options)
@@ -318,7 +320,7 @@ class ModelBackend(MetadataBackend):
 
     @staticmethod
     def validate(options):
-        """ Validates the application of this backend to a given metadata 
+        """ Validates the application of this backend to a given metadata
         """
         try:
             if options.backends.index('modelinstance') > options.backends.index('model'):
@@ -327,9 +329,8 @@ class ModelBackend(MetadataBackend):
             raise Exception("Metadata backend 'modelinstance' must be installed in order to use 'model' backend")
 
 
-
 def _resolve(value, model_instance=None, context=None):
-    """ Resolves any template references in the given value. 
+    """ Resolves any template references in the given value.
     """
 
     if isinstance(value, basestring) and "{" in value:
@@ -339,4 +340,3 @@ def _resolve(value, model_instance=None, context=None):
             context[model_instance._meta.module_name] = model_instance
         value = Template(value).render(context)
     return value
-

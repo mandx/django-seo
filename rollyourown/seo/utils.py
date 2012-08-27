@@ -3,17 +3,22 @@
 import logging
 import re
 
-from django.conf import settings
-from django.db import models
+# from django.conf import settings
+# from django.db import models
 from django.utils.functional import lazy
 from django.utils.safestring import mark_safe
 from django.utils.html import conditional_escape
 from django.contrib.contenttypes.models import ContentType
 
+
 class NotSet(object):
     " A singleton to identify unset values (where None would have meaning) "
-    def __str__(self): return "NotSet"
-    def __repr__(self): return self.__str__()
+    def __str__(self):
+        return "NotSet"
+
+    def __repr__(self):
+        return self.__str__()
+
 NotSet = NotSet()
 
 
@@ -40,6 +45,7 @@ class LazyList(list):
             # TODO: Test this functionality!
             self.populate = populate_function
         self._populated = False
+
     def _populate(self):
         """ Populate this list by calling populate(), but only once. """
         if not self._populated:
@@ -54,18 +60,23 @@ class LazyList(list):
     def __len__(self):
         self._populate()
         return super(LazyList, self).__len__()
+
     def __getitem__(self, key):
         self._populate()
         return super(LazyList, self).__getitem__(key)
+
     def __setitem__(self, key, value):
         self._populate()
         return super(LazyList, self).__setitem__(key, value)
+
     def __delitem__(self, key):
         self._populate()
         return super(LazyList, self).__delitem__(key)
+
     def __iter__(self):
         self._populate()
         return super(LazyList, self).__iter__()
+
     def __contains__(self, item):
         self._populate()
         return super(LazyList, self).__contains__(item)
@@ -78,7 +89,7 @@ class LazyChoices(LazyList):
 
     def __nonzero__(self):
         # Django tests for existence too early, meaning population is attempted
-        # before the models have been imported. 
+        # before the models have been imported.
         # This may have some side effects if truth testing is supposed to
         # evaluate the list, but in the case of django choices, this is not
         # The case. This prevents __len__ from being called on truth tests.
@@ -89,6 +100,7 @@ class LazyChoices(LazyList):
 
 
 from django.core.urlresolvers import RegexURLResolver, RegexURLPattern, Resolver404, get_resolver
+
 
 def _pattern_resolve_to_name(pattern, path):
     match = pattern.regex.search(path)
@@ -101,6 +113,7 @@ def _pattern_resolve_to_name(pattern, path):
         else:
             name = "%s.%s" % (pattern.callback.__module__, pattern.callback.func_name)
         return name
+
 
 def _resolver_resolve_to_name(resolver, path):
     tried = []
@@ -119,7 +132,7 @@ def _resolver_resolve_to_name(resolver, path):
                 if name:
                     return name
                 tried.append(pattern.regex.pattern)
-        raise Resolver404, {'tried': tried, 'path': new_path}
+        raise Resolver404({'tried': tried, 'path': new_path})
 
 
 def resolve_to_name(path, urlconf=None):
@@ -136,7 +149,7 @@ def _replace_quot(match):
 
 def escape_tags(value, valid_tags):
     """ Strips text from the given html string, leaving only tags.
-        This functionality requires BeautifulSoup, nothing will be 
+        This functionality requires BeautifulSoup, nothing will be
         done otherwise.
 
         This isn't perfect. Someone could put javascript in here:
@@ -159,16 +172,18 @@ def escape_tags(value, valid_tags):
 
     # Allow comments to be hidden
     value = value.replace("&lt;!--", "<!--").replace("--&gt;", "-->")
-    
+
     return mark_safe(value)
 
 
 def _get_seo_content_types(seo_models):
     """ Returns a list of content types from the models defined in settings (SEO_MODELS) """
     try:
-        return [ ContentType.objects.get_for_model(m).id for m in seo_models ]
-    except: # previously caught DatabaseError
+        return [ContentType.objects.get_for_model(m).id for m in seo_models]
+    except:  # previously caught DatabaseError
         # Return an empty list if this is called too early
         return []
+
+
 def get_seo_content_types(seo_models):
     return lazy(_get_seo_content_types, list)(seo_models)

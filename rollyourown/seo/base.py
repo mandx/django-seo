@@ -6,12 +6,12 @@
 #    * Make backends optional: Meta.backends = (path, modelinstance/model, view)
 
 from django.db import models
-from django.utils.translation import ugettext_lazy as _
+# from django.utils.translation import ugettext_lazy as _
 from django.utils.datastructures import SortedDict
 from django.utils.functional import curry
-from django.contrib.sites.models import Site
+# from django.contrib.sites.models import Site
 from django.contrib.contenttypes.models import ContentType
-from django.conf import settings
+# from django.conf import settings
 from django.utils.safestring import mark_safe
 from django.core.cache import cache
 from django.utils.hashcompat import md5_constructor
@@ -21,6 +21,7 @@ from rollyourown.seo.utils import NotSet, Literal
 from rollyourown.seo.options import Options
 from rollyourown.seo.fields import MetadataField, Tag, MetaTag, KeywordTag, Raw
 from rollyourown.seo.backends import backend_registry, RESERVED_FIELD_NAMES
+from rollyourown.seo.i18n_utils import i18n_unprefix_path
 
 
 registry = SortedDict()
@@ -33,11 +34,12 @@ class FormattedMetadata(object):
 
     def __init__(self, metadata, instances, path, site=None, language=None):
         self.__metadata = metadata
+        path = i18n_unprefix_path(path)
         if metadata._meta.use_cache:
             if metadata._meta.use_sites and site:
-                hexpath = md5_constructor(iri_to_uri(site.domain+path)).hexdigest() 
+                hexpath = md5_constructor(iri_to_uri(site.domain + path)).hexdigest()
             else:
-                hexpath = md5_constructor(iri_to_uri(path)).hexdigest() 
+                hexpath = md5_constructor(iri_to_uri(path)).hexdigest()
             if metadata._meta.use_i18n:
                 self.__cache_prefix = 'rollyourown.seo.%s.%s.%s' % (self.__metadata.__class__.__name__, hexpath, language)
             else:
@@ -48,7 +50,7 @@ class FormattedMetadata(object):
         self.__instances_cache = []
 
     def __instances(self):
-        """ Cache instances, allowing generators to be used and reused. 
+        """ Cache instances, allowing generators to be used and reused.
             This fills a cache as the generator gets emptied, eventually
             reading exclusively from the cache.
         """
@@ -59,7 +61,7 @@ class FormattedMetadata(object):
             yield instance
 
     def _resolve_value(self, name):
-        """ Returns an appropriate value for the given name. 
+        """ Returns an appropriate value for the given name.
             This simply asks each of the instances for a value.
         """
         for instance in self.__instances():
@@ -117,7 +119,7 @@ class FormattedMetadata(object):
             value = None
 
         if value is None:
-            value = mark_safe(u'\n'.join(unicode(getattr(self, f)) for f,e in self.__metadata._meta.elements.items() if e.head))
+            value = mark_safe(u'\n'.join(unicode(getattr(self, f)) for f, e in self.__metadata._meta.elements.items() if e.head))
             if self.__cache_prefix is not None:
                 cache.set(self.__cache_prefix, value or '')
 
@@ -166,16 +168,16 @@ class MetadataBase(type):
         options = Options(Meta, help_text)
 
         # Collect and sort our elements
-        elements = [(key, attrs.pop(key)) for key, obj in attrs.items() 
+        elements = [(key, attrs.pop(key)) for key, obj in attrs.items()
                                         if isinstance(obj, MetadataField)]
-        elements.sort(lambda x, y: cmp(x[1].creation_counter, 
+        elements.sort(lambda x, y: cmp(x[1].creation_counter,
                                                 y[1].creation_counter))
         elements = SortedDict(elements)
 
         # Validation:
         # TODO: Write a test framework for seo.Metadata validation
         # Check that no group names clash with element names
-        for key,members in options.groups.items():
+        for key, members in options.groups.items():
             assert key not in elements, "Group name '%s' clashes with field name" % key
             for member in members:
                 assert member in elements, "Group member '%s' is not a valid field" % member
@@ -183,7 +185,6 @@ class MetadataBase(type):
         # Check that the names of the elements are not going to clash with a model field
         for key in elements:
             assert key not in RESERVED_FIELD_NAMES, "Field name '%s' is not allowed" % key
-
 
         # Preprocessing complete, here is the new class
         new_class = type.__new__(cls, name, bases, attrs)
@@ -212,20 +213,18 @@ class MetadataBase(type):
 
         return new_class
 
-
     # TODO: Move this function out of the way (subclasses will want to define their own attributes)
     def _get_formatted_data(cls, path, context=None, site=None, language=None):
         """ Return an object to conveniently access the appropriate values. """
         return FormattedMetadata(cls(), cls._get_instances(path, context, site, language), path, site, language)
 
-
     # TODO: Move this function out of the way (subclasses will want to define their own attributes)
     def _get_instances(cls, path, context=None, site=None, language=None):
-        """ A sequence of instances to discover metadata. 
+        """ A sequence of instances to discover metadata.
             Each instance from each backend is looked up when possible/necessary.
             This is a generator to eliminate unnecessary queries.
         """
-        backend_context = {'view_context': context }
+        backend_context = {'view_context': context, }
 
         for model in cls._meta.models.values():
             for instance in model.objects.get_instances(path, site, language, backend_context) or []:
@@ -245,7 +244,7 @@ def _get_metadata_model(name=None):
             return registry[name]
         except KeyError:
             if len(registry) == 1:
-                valid_names = u'Try using the name "%s" or simply leaving it out altogether.'% registry.keys()[0]
+                valid_names = u'Try using the name "%s" or simply leaving it out altogether.' % registry.keys()[0]
             else:
                 valid_names = u"Valid names are " + u", ".join(u'"%s"' % k for k in registry.keys())
             raise Exception(u"Metadata definition with name \"%s\" does not exist.\n%s" % (name, valid_names))
@@ -279,23 +278,23 @@ def get_linked_metadata(obj, name=None, context=None, site=None, language=None):
             model_md = ModelMetadata.objects.get(_content_type=content_type)
         except ModelMetadata.DoesNotExist:
             model_md = ModelMetadata(_content_type=content_type)
-        instances.append(model_md)    
+        instances.append(model_md)
     return FormattedMetadata(Metadata, instances, '', site, language)
 
 
 def create_metadata_instance(metadata_class, instance):
     # If this instance is marked as handled, don't do anything
-    # This typically means that the django admin will add metadata 
+    # This typically means that the django admin will add metadata
     # using eg an inline.
     if getattr(instance, '_MetadataFormset__seo_metadata_handled', False):
         return
 
     metadata = None
     content_type = ContentType.objects.get_for_model(instance)
-    
+
     # If this object does not define a path, don't worry about automatic update
     try:
-        path = instance.get_absolute_url()
+        path = i18n_unprefix_path(instance.get_absolute_url())
     except AttributeError:
         return
 
@@ -307,14 +306,14 @@ def create_metadata_instance(metadata_class, instance):
         # It's harsh, but we need a unique path and will assume the other
         # link is outdated.
         if md._content_type != content_type or md._object_id != instance.pk:
-            md._path = md._content_object.get_absolute_url()
+            md._path = i18n_unprefix_path(md._content_object.get_absolute_url())
             md.save()
             # Move on, this metadata instance isn't for us
             md = None
         else:
             # This is our instance!
             metadata = md
-    
+
     # If the path-based search didn't work, look for (or create) an existing
     # instance linked to this object.
     if not metadata:
@@ -324,17 +323,17 @@ def create_metadata_instance(metadata_class, instance):
 
 
 def populate_metadata(model, MetadataClass):
-    """ For a given model and metadata class, ensure there is metadata for every instance. 
+    """ For a given model and metadata class, ensure there is metadata for every instance.
     """
-    content_type = ContentType.objects.get_for_model(model)
+    # content_type = ContentType.objects.get_for_model(model)
     for instance in model.objects.all():
         create_metadata_instance(MetadataClass, instance)
 
 
 def _update_callback(model_class, sender, instance, created, **kwargs):
     """ Callback to be attached to a post_save signal, updating the relevant
-        metadata, or just creating an entry. 
-    
+        metadata, or just creating an entry.
+
         NB:
         It is theoretically possible that this code will lead to two instances
         with the same generic foreign key.  If you have non-overlapping URLs,
@@ -344,7 +343,7 @@ def _update_callback(model_class, sender, instance, created, **kwargs):
     create_metadata_instance(model_class, instance)
 
 
-def _delete_callback(model_class, sender, instance,  **kwargs):
+def _delete_callback(model_class, sender, instance, **kwargs):
     content_type = ContentType.objects.get_for_model(instance)
     model_class.objects.filter(_content_type=content_type, _object_id=instance.pk).delete()
 
@@ -360,5 +359,3 @@ def register_signals():
             for model in metadata_class._meta.seo_models:
                 models.signals.post_save.connect(update_callback, sender=model, weak=False)
                 models.signals.pre_delete.connect(delete_callback, sender=model, weak=False)
-
-
